@@ -1,34 +1,26 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
 from app.core.database import get_db
-from app.models import Plant, Item, Supplier, Contract, ContractLine, Policy, PurchaseRequest, PRLine, PurchaseOrderHistory
-from app.services.data_import import import_all_master_data
+from app.controllers.data_controller import DataController
+from app.repositories import ItemRepository, SupplierRepository, PlantRepository, ContractRepository
 
 router = APIRouter()
 
 @router.get("/stats")
 def get_stats(db: Session = Depends(get_db)):
-    return {
-        "plants": db.query(Plant).count(),
-        "items": db.query(Item).count(),
-        "suppliers": db.query(Supplier).count(),
-        "contracts": db.query(Contract).count(),
-        "contract_lines": db.query(ContractLine).count(),
-        "po_history": db.query(PurchaseOrderHistory).count(),
-        "policies": db.query(Policy).count(),
-        "purchase_requests": db.query(PurchaseRequest).count(),
-        "pr_lines": db.query(PRLine).count(),
-    }
+    controller = DataController(db)
+    return controller.get_stats()
 
 @router.post("/reimport")
 def reimport_master_data(db: Session = Depends(get_db)):
-    counts = import_all_master_data(db)
+    controller = DataController(db)
+    counts = controller.import_all()
     return {"message": "Data imported successfully", "counts": counts}
 
 @router.get("/items")
 def list_items(db: Session = Depends(get_db)):
-    items = db.query(Item).all()
+    repo = ItemRepository(db)
+    items = repo.get_all()
     return [{
         "item_code": i.item_code,
         "description": i.description,
@@ -40,7 +32,8 @@ def list_items(db: Session = Depends(get_db)):
 
 @router.get("/suppliers")
 def list_suppliers(db: Session = Depends(get_db)):
-    suppliers = db.query(Supplier).all()
+    repo = SupplierRepository(db)
+    suppliers = repo.get_all()
     return [{
         "supplier_id": s.supplier_id,
         "name": s.name,
@@ -51,34 +44,8 @@ def list_suppliers(db: Session = Depends(get_db)):
         "quality_rating": s.quality_rating
     } for s in suppliers]
 
-@router.get("/contracts")
-def list_contracts(db: Session = Depends(get_db)):
-    contracts = db.query(Contract).all()
-    res = []
-    for c in contracts:
-        lines = [{
-            "id": l.id,
-            "item_code": l.item_code,
-            "description": l.description,
-            "uom": l.uom,
-            "rate": l.rate
-        } for l in c.lines]
-        res.append({
-            "contract_id": c.contract_id,
-            "supplier_id": c.supplier_id,
-            "supplier_name": c.supplier_name,
-            "start_date": str(c.start_date),
-            "end_date": str(c.end_date),
-            "value_cap": c.value_cap,
-            "consumed_value": c.consumed_value,
-            "remaining_ceiling": c.value_cap - c.consumed_value,
-            "source_type": c.source_type,
-            "document_path": c.document_path,
-            "lines": lines
-        })
-    return res
-
 @router.get("/plants")
 def list_plants(db: Session = Depends(get_db)):
-    plants = db.query(Plant).all()
+    repo = PlantRepository(db)
+    plants = repo.get_all()
     return [{"plant": p.plant, "name": p.name} for p in plants]

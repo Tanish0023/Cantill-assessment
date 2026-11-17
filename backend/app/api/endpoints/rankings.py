@@ -1,14 +1,10 @@
 import datetime
-from typing import Optional, List
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models import Item
-from app.services.supplier_ranking import (
-    get_preferred_suppliers,
-    get_sourcing_suggestions,
-    export_supplier_rankings_csv
-)
+from app.controllers.ranking_controller import RankingController
+from app.repositories import ItemRepository
 
 router = APIRouter()
 
@@ -28,10 +24,12 @@ def get_rankings(
     db: Session = Depends(get_db)
 ):
     target_date = parse_query_date(as_of_date)
+    controller = RankingController(db)
+    item_repo = ItemRepository(db)
     
     if item_code:
-        item = db.query(Item).filter_by(item_code=item_code).first()
-        results = get_preferred_suppliers(db, item_code, target_date, top_n=top_n)
+        item = item_repo.get_by_code(item_code)
+        results = controller.get_preferred_suppliers(item_code, target_date, top_n=top_n)
         return {
             "item_code": item_code,
             "item_description": item.description if item else None,
@@ -39,10 +37,10 @@ def get_rankings(
             "rankings": results
         }
         
-    items = db.query(Item).order_by(Item.item_code).all()
+    items = item_repo.get_all()
     all_res = []
     for item in items:
-        ranked = get_preferred_suppliers(db, item.item_code, target_date, top_n=top_n or 3)
+        ranked = controller.get_preferred_suppliers(item.item_code, target_date, top_n=top_n or 3)
         all_res.append({
             "item_code": item.item_code,
             "item_description": item.description,
@@ -61,7 +59,8 @@ def export_rankings(
     db: Session = Depends(get_db)
 ):
     target_date = parse_query_date(as_of_date)
-    csv_content = export_supplier_rankings_csv(db, target_date, top_n=top_n)
+    controller = RankingController(db)
+    csv_content = controller.export_rankings_csv(target_date, top_n=top_n)
     filename = f"supplier_rankings_{target_date}.csv"
     return Response(
         content=csv_content,
@@ -77,7 +76,8 @@ def get_suggestions(
     db: Session = Depends(get_db)
 ):
     target_date = parse_query_date(as_of_date)
-    suggestions = get_sourcing_suggestions(db, item_code, target_date, count)
+    controller = RankingController(db)
+    suggestions = controller.get_sourcing_suggestions(item_code, target_date, count)
     return {
         "item_code": item_code,
         "as_of_date": str(target_date),

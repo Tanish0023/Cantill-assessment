@@ -5,8 +5,8 @@ from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
-from app.models import Requirement, Decision, ConsolidatedPO, PRLine, PurchaseRequest
-from app.services.procurement_engine import process_batch, get_active_policy
+from app.controllers.procurement_controller import ProcurementController
+from app.repositories import PolicyRepository
 
 router = APIRouter()
 
@@ -42,7 +42,8 @@ def generate_csv_output(results: List[Dict[str, Any]]) -> str:
 async def process_batch_endpoint(
     file: Optional[UploadFile] = File(None),
     policy_version: Optional[str] = None,
-    export_format: Optional[str] = "json", # "json" or "csv"
+    export_format: Optional[str] = "json",
+    persist: Optional[bool] = False,
     db: Session = Depends(get_db)
 ):
     if not file:
@@ -55,14 +56,14 @@ async def process_batch_endpoint(
         raise HTTPException(status_code=400, detail=f"Invalid CSV format: {e}")
 
     lines_data = df.to_dict(orient="records")
+    controller = ProcurementController(db)
+    policy_repo = PolicyRepository(db)
     
-    # Specific policy override if requested
     policy_obj = None
     if policy_version:
-        from app.models import Policy
-        policy_obj = db.query(Policy).filter_by(version=policy_version).first()
+        policy_obj = policy_repo.get_by_version(policy_version)
 
-    results = process_batch(db, lines_data, policy_override=policy_obj)
+    results = controller.process_batch(lines_data, policy_override=policy_obj, persist=persist or False)
 
     if export_format == "csv":
         csv_str = generate_csv_output(results)
@@ -81,6 +82,7 @@ async def process_batch_endpoint(
 def export_sample_decisions(
     policy_version: Optional[str] = None,
     format: str = "csv",
+    persist: bool = True,
     db: Session = Depends(get_db)
 ):
     import os
@@ -92,12 +94,14 @@ def export_sample_decisions(
     df = pd.read_csv(sample_csv_path)
     lines_data = df.to_dict(orient="records")
 
+    controller = ProcurementController(db)
+    policy_repo = PolicyRepository(db)
+
     policy_obj = None
     if policy_version:
-        from app.models import Policy
-        policy_obj = db.query(Policy).filter_by(version=policy_version).first()
+        policy_obj = policy_repo.get_by_version(policy_version)
 
-    results = process_batch(db, lines_data, policy_override=policy_obj)
+    results = controller.process_batch(lines_data, policy_override=policy_obj, persist=persist)
 
     if format == "csv":
         csv_str = generate_csv_output(results)

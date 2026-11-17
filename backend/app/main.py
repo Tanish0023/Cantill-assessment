@@ -2,11 +2,14 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.core.database import init_db, SessionLocal
-from app.models import Item
-from app.services.data_import import import_all_master_data
+from app.controllers.data_controller import DataController
 from app.api.endpoints.data import router as data_router
 from app.api.endpoints.rankings import router as rankings_router
 from app.api.endpoints.batch import router as batch_router
+from app.api.endpoints.chat import router as chat_router
+from app.api.endpoints.policies import router as policies_router
+from app.api.endpoints.contracts import router as contracts_router
+from app.api.endpoints.buyer import router as buyer_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -27,8 +30,9 @@ def on_startup():
     init_db()
     db = SessionLocal()
     try:
-        if db.query(Item).count() == 0:
-            import_all_master_data(db)
+        data_ctrl = DataController(db)
+        if data_ctrl.get_stats()["items"] == 0:
+            data_ctrl.import_all()
     finally:
         db.close()
 
@@ -43,6 +47,10 @@ def api_health():
 app.include_router(data_router, prefix=f"{settings.API_V1_STR}/data", tags=["data"])
 app.include_router(rankings_router, prefix=f"{settings.API_V1_STR}/rankings", tags=["rankings"])
 app.include_router(batch_router, prefix=settings.API_V1_STR, tags=["batch"])
+app.include_router(chat_router, prefix=f"{settings.API_V1_STR}/chat", tags=["chat"])
+app.include_router(policies_router, prefix=f"{settings.API_V1_STR}/policies", tags=["policies"])
+app.include_router(contracts_router, prefix=f"{settings.API_V1_STR}/contracts", tags=["contracts"])
+app.include_router(buyer_router, prefix=f"{settings.API_V1_STR}/buyer", tags=["buyer"])
 
 if __name__ == "__main__":
     import uvicorn
