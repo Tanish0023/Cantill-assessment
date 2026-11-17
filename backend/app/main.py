@@ -6,6 +6,7 @@ from app.models import Item
 from app.services.data_import import import_all_master_data
 from app.api.endpoints.data import router as data_router
 from app.api.endpoints.rankings import router as rankings_router
+from app.api.endpoints.batch import router as batch_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -41,6 +42,7 @@ def api_health():
 
 app.include_router(data_router, prefix=f"{settings.API_V1_STR}/data", tags=["data"])
 app.include_router(rankings_router, prefix=f"{settings.API_V1_STR}/rankings", tags=["rankings"])
+app.include_router(batch_router, prefix=settings.API_V1_STR, tags=["batch"])
 
 if __name__ == "__main__":
     import uvicorn
