@@ -2,14 +2,17 @@ import os
 from typing import Optional
 from pydantic_settings import BaseSettings
 
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_DEFAULT_DB_PATH = os.path.join(_BASE_DIR, "cantill.db")
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Corvo Procurement Engine"
     API_V1_STR: str = "/api"
-    DATABASE_URL: str = os.getenv("DATABASE_URL", "sqlite:///./cantill.db")
+    DATABASE_URL: str = os.getenv("DATABASE_URL", f"sqlite:///{_DEFAULT_DB_PATH}")
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
-    BASE_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    DATA_DIR: str = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    BASE_DIR: str = _BASE_DIR
+    DATA_DIR: str = os.path.dirname(_BASE_DIR)
 
     class Config:
         env_file = ".env"
