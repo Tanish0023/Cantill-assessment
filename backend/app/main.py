@@ -5,6 +5,7 @@ from app.core.database import init_db, SessionLocal
 from app.models import Item
 from app.services.data_import import import_all_master_data
 from app.api.endpoints.data import router as data_router
+from app.api.endpoints.rankings import router as rankings_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -25,7 +26,6 @@ def on_startup():
     init_db()
     db = SessionLocal()
     try:
-        # Check if items exist, otherwise import
         if db.query(Item).count() == 0:
             import_all_master_data(db)
     finally:
@@ -40,6 +40,7 @@ def api_health():
     return {"status": "healthy", "version": "1.0.0"}
 
 app.include_router(data_router, prefix=f"{settings.API_V1_STR}/data", tags=["data"])
+app.include_router(rankings_router, prefix=f"{settings.API_V1_STR}/rankings", tags=["rankings"])
 
 if __name__ == "__main__":
     import uvicorn
