@@ -16,7 +16,7 @@ def create_db_engine():
 
     if "postgresql" in db_url:
         try:
-            test_engine = create_engine(db_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
+            test_engine = create_engine(db_url, pool_pre_ping=True, connect_args={"connect_timeout": 15})
             with test_engine.connect() as conn:
                 logger.info("Successfully connected to PostgreSQL database.")
             return test_engine
