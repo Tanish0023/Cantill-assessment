@@ -8,10 +8,15 @@ logger = logging.getLogger(__name__)
 
 def create_db_engine():
     db_url = settings.DATABASE_URL
-    # Normalize postgres url if needed
-    if db_url.startswith("postgresql://") or db_url.startswith("postgres://"):
+    # Normalize postgres url to use psycopg2 driver
+    if db_url.startswith("postgres://"):
+        db_url = db_url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif db_url.startswith("postgresql://") and not db_url.startswith("postgresql+"):
+        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+
+    if "postgresql" in db_url:
         try:
-            test_engine = create_engine(db_url, pool_pre_ping=True, connect_args={"connect_timeout": 2})
+            test_engine = create_engine(db_url, pool_pre_ping=True, connect_args={"connect_timeout": 5})
             with test_engine.connect() as conn:
                 logger.info("Successfully connected to PostgreSQL database.")
             return test_engine

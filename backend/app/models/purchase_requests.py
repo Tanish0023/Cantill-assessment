@@ -1,5 +1,6 @@
 from datetime import datetime
 from sqlalchemy import Column, Integer, String, Float, Date, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from app.core.database import Base
 
 class PurchaseRequest(Base):
@@ -12,6 +13,8 @@ class PurchaseRequest(Base):
     created_at = Column(DateTime, nullable=False, index=True)
     status = Column(String(50), default="SUBMITTED")
     source = Column(String(50), default="BATCH")
+
+    lines = relationship("PRLine", back_populates="purchase_request", cascade="all, delete-orphan")
 
 class PRLine(Base):
     __tablename__ = "pr_lines"
@@ -29,3 +32,5 @@ class PRLine(Base):
     urgency = Column(String(20), default="Normal")
     created_at = Column(DateTime, nullable=False)
     group_id = Column(String(50), nullable=True, index=True)
+
+    purchase_request = relationship("PurchaseRequest", back_populates="lines")

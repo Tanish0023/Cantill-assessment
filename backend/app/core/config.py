@@ -5,6 +5,12 @@ from pydantic_settings import BaseSettings
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _DEFAULT_DB_PATH = os.path.join(_BASE_DIR, "cantill.db")
 
+# Auto-detect data directory (either repo root or container app dir)
+if os.path.exists(os.path.join(_BASE_DIR, "master_data")):
+    _DEFAULT_DATA_DIR = _BASE_DIR
+else:
+    _DEFAULT_DATA_DIR = os.path.dirname(_BASE_DIR)
+
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Corvo Procurement Engine"
     API_V1_STR: str = "/api"
@@ -16,7 +22,7 @@ class Settings(BaseSettings):
     GEMINI_FALLBACK_MODEL: str = os.getenv("GEMINI_FALLBACK_MODEL", "gemini-1.5-flash")
     
     BASE_DIR: str = _BASE_DIR
-    DATA_DIR: str = os.path.dirname(_BASE_DIR)
+    DATA_DIR: str = os.getenv("DATA_DIR", _DEFAULT_DATA_DIR)
 
     class Config:
         env_file = ".env"

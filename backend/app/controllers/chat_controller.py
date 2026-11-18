@@ -116,7 +116,7 @@ class ChatController:
             entity_id=pr_no,
             action="CREATE_VIA_CHAT",
             performed_by=req_data.get("requester", "Employee"),
-            comment=f"Created PR {pr_no} via chat intake for {req_data['quantity']} of {req_data['description']}",
+            comment=f"Created PR {pr_no} via chat intake for {req_data['quantity']} of {desc}",
             payload_json=req_data
         )
 
@@ -127,7 +127,7 @@ class ChatController:
             "created_at": str(now),
             "plant": req_data["plant"],
             "item_code": req_data.get("item_code"),
-            "description": req_data["description"],
+            "description": desc,
             "quantity": req_data["quantity"],
             "uom": req_data.get("uom", "NOS"),
             "estimated_unit_price": req_data.get("estimated_unit_price"),
