@@ -1,6 +1,6 @@
 # Corvo Engineering Autonomous PR-to-PO Decision Engine
 
-> **Cantill.ai Full-Stack Intern Technical Assessment**  
+> **Cantill.ai Full-Stack Intern Technical Assessment**
 > An autonomous, policy-driven procurement engine that ingests Purchase Requisitions (PRs), clubs demand, values requirements, enforces contract ceilings, ranks suppliers, and automatically generates Purchase Orders (POs) or Sourcing Requests (RFQs/RFPs).
 
 ---
@@ -60,7 +60,7 @@ backend/
  └── app/data/                # Corvo master datasets & PDF contracts
 ```
 
-For full architecture details, see [APPROACH.md](APPROACH.md).  
+For full architecture details, see [APPROACH.md](APPROACH.md).
 For procurement policy decisions and edge-case handling, see [DECISIONS.md](DECISIONS.md).
 
 ---
@@ -77,7 +77,7 @@ docker compose up --build
 
 - **Frontend:** http://localhost:3000
 - **Backend API & Swagger UI:** http://localhost:8000/docs
-- **PostgreSQL Database:** localhost:5433
+- **PostgreSQL Database:** localhost:5434
 
 ---
 

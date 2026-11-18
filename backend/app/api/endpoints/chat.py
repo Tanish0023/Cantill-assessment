@@ -20,7 +20,8 @@ class ConfirmPRRequest(BaseModel):
     department: Optional[str] = "Operations"
     plant: str
     item_code: Optional[str] = None
-    description: str
+    description: Optional[str] = None
+    item_description: Optional[str] = None
     quantity: float
     uom: Optional[str] = "NOS"
     need_by_date: str
@@ -90,9 +91,11 @@ def chat_message(req: ChatMessageRequest, db: Session = Depends(get_db)):
 
     return {
         "reply": reply,
+        "response": reply,
         "is_complete": is_complete,
         "missing_fields": missing,
-        "state": state
+        "state": state,
+        "extracted_pr": state
     }
 
 @router.post("/confirm")
@@ -122,13 +125,14 @@ def confirm_pr(req: ConfirmPRRequest, db: Session = Depends(get_db)):
     db.add(pr_obj)
 
     # Create PRLine
-    resolved_code, _ = resolve_item(db, req.item_code, req.description)
+    desc = req.description or req.item_description or "General Item"
+    resolved_code, _ = resolve_item(db, req.item_code, desc)
     pr_line = PRLine(
         pr_no=pr_no,
         pr_line=1,
         input_item_code=req.item_code,
         resolved_item_code=resolved_code,
-        description=req.description,
+        description=desc,
         quantity=req.quantity,
         uom=req.uom,
         estimated_unit_price=req.estimated_unit_price,

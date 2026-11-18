@@ -95,11 +95,12 @@ class ChatController:
             source="CHAT"
         )
 
-        resolved_code, _ = self.procurement_controller.resolve_item(req_data.get("item_code"), req_data["description"])
+        desc = req_data.get("description") or req_data.get("item_description") or "General Item"
+        resolved_code, _ = self.procurement_controller.resolve_item(req_data.get("item_code"), desc)
         self.pr_repo.create_pr_line(
             pr_no=pr_no,
             pr_line=1,
-            description=req_data["description"],
+            description=desc,
             quantity=req_data["quantity"],
             need_by_date=need_by,
             input_item_code=req_data.get("item_code"),

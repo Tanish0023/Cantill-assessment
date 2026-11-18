@@ -51,16 +51,19 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ onPRConfirmed, showNotif
 
     try {
       const res = await api.sendChatMessage(userMsg, extractedPR);
-      setMessages(prev => [...prev, { role: 'assistant', text: res.response }]);
-      if (res.extracted_pr) {
-        setExtractedPR(res.extracted_pr);
+      const reply = res.reply || res.response || "I have received your request.";
+      setMessages(prev => [...prev, { role: 'assistant', text: reply }]);
+      const stateObj = res.state || res.extracted_pr;
+      if (stateObj) {
+        setExtractedPR(stateObj);
       }
     } catch (err: any) {
+      console.error("Chat error:", err);
       setMessages(prev => [
         ...prev, 
-        { role: 'assistant', text: "Sorry, I encountered an error communicating with the intake service. Please try again." }
+        { role: 'assistant', text: "Sorry, I encountered an error communicating with the intake service: " + (err.message || 'Please check connection.') }
       ]);
-      showNotification("Failed to send chat message", "error");
+      showNotification("Failed to send chat message: " + (err.message || ''), "error");
     } finally {
       setLoading(false);
     }
@@ -71,7 +74,11 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ onPRConfirmed, showNotif
     setConfirming(true);
 
     try {
-      const res = await api.confirmChatPR(extractedPR);
+      const payload = {
+        ...extractedPR,
+        description: extractedPR.description || extractedPR.matched_description || extractedPR.item_description || "General Item",
+      };
+      const res = await api.confirmChatPR(payload);
       setConfirmedResult(res);
       showNotification(`Purchase Request ${res.pr_no || ''} confirmed and evaluated!`, "success");
       if (onPRConfirmed) onPRConfirmed(res);
@@ -94,7 +101,7 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ onPRConfirmed, showNotif
     setInput('');
   };
 
-  const isComplete = extractedPR?.item_description && extractedPR?.quantity && extractedPR?.plant;
+  const isComplete = Boolean((extractedPR?.matched_description || extractedPR?.item_description) && extractedPR?.quantity && extractedPR?.plant);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
@@ -238,8 +245,13 @@ export const ChatScreen: React.FC<ChatScreenProps> = ({ onPRConfirmed, showNotif
                   <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wider block">
                     Description
                   </span>
-                  <span className="font-semibold text-slate-900 text-sm">
-                    {extractedPR.item_description || <span className="text-red-500 italic">Missing description</span>}
+                  <span className="font-semibold text-slate-900 text-sm flex items-center justify-between">
+                    <span>{extractedPR.matched_description || extractedPR.item_description || <span className="text-red-500 italic">Missing description</span>}</span>
+                    {extractedPR.resolved_item_code && extractedPR.resolved_item_code !== 'NEW' && (
+                      <Badge variant="outline" className="font-mono text-[10px]">
+                        {extractedPR.resolved_item_code}
+                      </Badge>
+                    )}
                   </span>
                 </div>
 
