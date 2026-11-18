@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Layers, Search, Filter, CheckCircle2, AlertTriangle, 
-  ExternalLink, Eye, ArrowUpDown, Clock, Building2, UserCheck, ShieldAlert
+  ExternalLink, Eye, ArrowUpDown, Clock, Building2, UserCheck, ShieldAlert, Loader2
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,11 +18,18 @@ interface BuyerScreenProps {
 
 export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) => {
   const [requirements, setRequirements] = useState<any[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+
   const [search, setSearch] = useState('');
   const [plantFilter, setPlantFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [routeFilter, setRouteFilter] = useState('ALL');
+
+  const observerTarget = useRef<HTMLDivElement>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Modals state
   const [selectedReqDetails, setSelectedReqDetails] = useState<any>(null);
@@ -35,21 +42,88 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
   const [overrideReason, setOverrideReason] = useState('');
   const [overrideSubmitting, setOverrideSubmitting] = useState(false);
 
-  const loadRequirements = async () => {
+  const loadInitialRequirements = useCallback(async (
+    currentSearch = search,
+    currentPlant = plantFilter,
+    currentStatus = statusFilter,
+    currentRoute = routeFilter
+  ) => {
     setLoading(true);
     try {
-      const data = await api.fetchWorkspaceRequirements();
-      setRequirements(data || []);
+      const res = await api.fetchWorkspaceRequirements({
+        limit: 20,
+        offset: 0,
+        search: currentSearch,
+        plant: currentPlant,
+        status: currentStatus,
+        route: currentRoute
+      });
+      setRequirements(res.items);
+      setTotalCount(res.totalCount);
+      setHasMore(res.hasMore && (res.items.length < res.totalCount));
     } catch (err: any) {
       showNotification('Failed to load workspace requirements: ' + err.message, 'error');
     } finally {
       setLoading(false);
     }
+  }, [search, plantFilter, statusFilter, routeFilter, showNotification]);
+
+  const loadMoreRequirements = async () => {
+    if (loading || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const currentOffset = requirements.length;
+      const res = await api.fetchWorkspaceRequirements({
+        limit: 20,
+        offset: currentOffset,
+        search,
+        plant: plantFilter,
+        status: statusFilter,
+        route: routeFilter
+      });
+      setRequirements(prev => [...prev, ...res.items]);
+      setTotalCount(res.totalCount);
+      setHasMore(res.hasMore && (currentOffset + res.items.length < res.totalCount));
+    } catch (err: any) {
+      showNotification('Failed to load more requirements: ' + err.message, 'error');
+    } finally {
+      setLoadingMore(false);
+    }
   };
 
+  // Initial load and filter change trigger
   useEffect(() => {
-    loadRequirements();
-  }, []);
+    loadInitialRequirements(search, plantFilter, statusFilter, routeFilter);
+  }, [plantFilter, statusFilter, routeFilter]);
+
+  // Debounced search trigger
+  const handleSearchChange = (val: string) => {
+    setSearch(val);
+    if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
+    searchTimeoutRef.current = setTimeout(() => {
+      loadInitialRequirements(val, plantFilter, statusFilter, routeFilter);
+    }, 350);
+  };
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    const target = observerTarget.current;
+    if (!target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          loadMoreRequirements();
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(target);
+    return () => {
+      observer.unobserve(target);
+    };
+  }, [hasMore, loading, loadingMore, requirements.length, search, plantFilter, statusFilter, routeFilter]);
 
   const handleOpenDetails = async (groupId: string) => {
     setDetailsLoading(true);
@@ -68,7 +142,17 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
     try {
       await api.approveDecision(groupId, 'Buyer Workspace');
       showNotification(`Requirement ${groupId} decision approved!`, 'success');
-      loadRequirements();
+      // In-place update so user doesn't lose infinite scroll position
+      setRequirements(prev => prev.map(r => {
+        if (r.group_id === groupId) {
+          return {
+            ...r,
+            status: 'APPROVED',
+            decision: r.decision ? { ...r.decision, status: 'APPROVED' } : { status: 'APPROVED' }
+          };
+        }
+        return r;
+      }));
     } catch (err: any) {
       showNotification('Failed to approve decision: ' + err.message, 'error');
     }
@@ -91,7 +175,22 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
       await api.overrideDecision(overrideGroupId, overrideRoute, overrideReason.trim(), 'Senior Buyer');
       showNotification(`Decision for ${overrideGroupId} successfully overridden to ${overrideRoute}!`, 'success');
       setOverrideModalOpen(false);
-      loadRequirements();
+      // In-place update
+      setRequirements(prev => prev.map(r => {
+        if (r.group_id === overrideGroupId) {
+          return {
+            ...r,
+            status: 'OVERRIDDEN',
+            decision: {
+              ...(r.decision || {}),
+              status: 'OVERRIDDEN',
+              route: overrideRoute,
+              override_reason: overrideReason.trim()
+            }
+          };
+        }
+        return r;
+      }));
     } catch (err: any) {
       showNotification('Failed to override decision: ' + err.message, 'error');
     } finally {
@@ -99,7 +198,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
     }
   };
 
-  // Filter logic
+  // Filter logic (also supports client-side instantaneous filtering)
   const filtered = requirements.filter((r) => {
     const term = search.toLowerCase();
     const d = r.decision || {};
@@ -131,7 +230,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Evaluated</p>
-              <p className="text-xl font-bold text-slate-900 mt-0.5">{requirements.length}</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">{totalCount > 0 ? totalCount : requirements.length}</p>
             </div>
             <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
               <Layers className="w-5 h-5" />
@@ -182,7 +281,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
           <Input
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             placeholder="Search by Requirement ID, Item, Description, or PO..."
             className="pl-9 h-9 text-xs"
           />
@@ -228,7 +327,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
             <option value="NEW_ITEM_SOURCING">New Item</option>
           </select>
 
-          <Button variant="outline" size="sm" onClick={loadRequirements} disabled={loading} className="h-9 text-xs">
+          <Button variant="outline" size="sm" onClick={() => loadInitialRequirements(search, plantFilter, statusFilter, routeFilter)} disabled={loading} className="h-9 text-xs">
             Refresh
           </Button>
         </div>
@@ -386,6 +485,43 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
                 })}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Infinite Scroll Sentinel and Status Bar */}
+        {!loading && requirements.length > 0 && (
+          <div 
+            ref={observerTarget}
+            className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50"
+          >
+            <div className="flex items-center space-x-2">
+              <span className="font-semibold text-slate-700">
+                Loaded {requirements.length} of {totalCount} requirements
+              </span>
+              <span className="text-slate-400">•</span>
+              <span className="text-slate-500">20 per batch</span>
+            </div>
+
+            {loadingMore ? (
+              <div className="flex items-center space-x-2 text-blue-600 font-medium">
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Fetching next 20 requirements...</span>
+              </div>
+            ) : hasMore ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadMoreRequirements}
+                className="h-7 text-xs px-3 border-slate-300 hover:bg-slate-100"
+              >
+                Load Next 20
+              </Button>
+            ) : (
+              <div className="flex items-center space-x-1.5 text-emerald-600 font-medium">
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>All {totalCount} requirements loaded</span>
+              </div>
+            )}
           </div>
         )}
       </div>

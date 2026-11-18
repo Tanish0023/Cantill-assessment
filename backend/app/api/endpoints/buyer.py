@@ -1,6 +1,6 @@
 from typing import Optional, Dict, Any
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.controllers.buyer_controller import BuyerController
@@ -17,9 +17,28 @@ class OverrideRequest(BaseModel):
     buyer_name: Optional[str] = "Buyer"
 
 @router.get("/requirements")
-def list_requirements(db: Session = Depends(get_db)):
+def list_requirements(
+    response: Response,
+    limit: Optional[int] = 20,
+    offset: int = 0,
+    plant: Optional[str] = None,
+    status: Optional[str] = None,
+    route: Optional[str] = None,
+    search: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     controller = BuyerController(db)
-    return controller.get_workspace_requirements()
+    items, total = controller.get_workspace_requirements_paginated(
+        limit=limit,
+        offset=offset,
+        plant=plant,
+        status=status,
+        route=route,
+        search=search
+    )
+    response.headers["X-Total-Count"] = str(total)
+    response.headers["X-Has-More"] = "true" if (offset + len(items)) < total else "false"
+    return items
 
 @router.get("/requirements/{group_id}")
 def get_requirement_details(group_id: str, db: Session = Depends(get_db)):

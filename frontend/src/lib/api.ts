@@ -60,10 +60,48 @@ export async function fetchRecentChatPRs() {
   return res.json();
 }
 
-export async function fetchWorkspaceRequirements() {
-  const res = await fetch(`${API_BASE}/api/buyer/requirements`);
+export interface FetchRequirementsParams {
+  limit?: number;
+  offset?: number;
+  plant?: string;
+  status?: string;
+  route?: string;
+  search?: string;
+}
+
+export interface WorkspaceRequirementsResponse {
+  items: any[];
+  totalCount: number;
+  hasMore: boolean;
+}
+
+export async function fetchWorkspaceRequirements(
+  params?: FetchRequirementsParams
+): Promise<WorkspaceRequirementsResponse> {
+  const query = new URLSearchParams();
+  if (params?.limit !== undefined) query.set('limit', String(params.limit));
+  if (params?.offset !== undefined) query.set('offset', String(params.offset));
+  if (params?.plant && params.plant !== 'ALL') query.set('plant', params.plant);
+  if (params?.status && params.status !== 'ALL') query.set('status', params.status);
+  if (params?.route && params.route !== 'ALL') query.set('route', params.route);
+  if (params?.search && params.search.trim()) query.set('search', params.search.trim());
+
+  const queryString = query.toString();
+  const url = `${API_BASE}/api/buyer/requirements${queryString ? `?${queryString}` : ''}`;
+  const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch workspace requirements');
-  return res.json();
+
+  const totalHeader = res.headers.get('X-Total-Count');
+  const hasMoreHeader = res.headers.get('X-Has-More');
+  const items = await res.json();
+  const totalCount = totalHeader ? parseInt(totalHeader, 10) : (Array.isArray(items) ? items.length : 0);
+  const hasMore = hasMoreHeader !== null ? (hasMoreHeader.toLowerCase() === 'true') : (Array.isArray(items) && items.length === (params?.limit ?? 20));
+
+  return {
+    items: Array.isArray(items) ? items : [],
+    totalCount,
+    hasMore
+  };
 }
 
 export async function fetchRequirementDetails(groupId: string) {

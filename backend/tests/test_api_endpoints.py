@@ -45,3 +45,12 @@ def test_buyer_requirements_endpoint(client):
     assert response.status_code == 200
     data = response.json()
     assert isinstance(data, list)
+    assert len(data) <= 20
+    assert "X-Total-Count" in response.headers
+    assert "X-Has-More" in response.headers
+
+    # Test second page offset=20
+    p2_res = client.get("/api/buyer/requirements?limit=20&offset=20")
+    assert p2_res.status_code == 200
+    p2_data = p2_res.json()
+    assert isinstance(p2_data, list)

@@ -3,6 +3,8 @@ from typing import Optional, Dict, Any, List
 from sqlalchemy.orm import Session
 from app.repositories import DecisionRepository, AuditLogRepository, ItemRepository, SupplierRepository
 
+from app.models import Requirement, Decision, Item, Supplier
+
 class BuyerController:
     def __init__(self, db: Session):
         self.db = db
@@ -11,18 +13,79 @@ class BuyerController:
         self.item_repo = ItemRepository(db)
         self.supplier_repo = SupplierRepository(db)
 
-    def get_workspace_requirements(self) -> List[Dict[str, Any]]:
-        reqs = self.decision_repo.get_all_requirements()
+    def get_workspace_requirements_paginated(
+        self,
+        limit: Optional[int] = 20,
+        offset: int = 0,
+        plant: Optional[str] = None,
+        status: Optional[str] = None,
+        route: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> tuple[List[Dict[str, Any]], int]:
+        query = (
+            self.db.query(Requirement, Decision)
+            .outerjoin(Decision, Requirement.group_id == Decision.group_id)
+        )
+
+        if plant and plant != "ALL":
+            query = query.filter(Requirement.plant == plant)
+
+        if status and status != "ALL":
+            if status == "AUTO_GENERATED":
+                query = query.filter((Decision.status == "AUTO_GENERATED") | (Decision.status.is_(None)))
+            else:
+                query = query.filter(Decision.status == status)
+
+        if route and route != "ALL":
+            query = query.filter(Decision.route == route)
+
+        if search and search.strip():
+            s = f"%{search.strip()}%"
+            query = query.filter(
+                (Requirement.group_id.ilike(s)) |
+                (Requirement.resolved_item_code.ilike(s)) |
+                (Decision.po_id.ilike(s))
+            )
+
+        total_count = query.count()
+
+        query = query.order_by(
+            Requirement.requirement_date.desc(),
+            Requirement.created_at.desc(),
+            Requirement.group_id
+        )
+
+        if offset > 0:
+            query = query.offset(offset)
+        if limit is not None:
+            query = query.limit(limit)
+
+        rows = query.all()
+        if not rows:
+            return [], total_count
+
+        item_codes = {r.resolved_item_code for r, _ in rows if r.resolved_item_code}
+        supplier_ids = {d.supplier_id for _, d in rows if d and d.supplier_id}
+
+        items_map = {}
+        if item_codes:
+            items = self.db.query(Item.item_code, Item.description).filter(Item.item_code.in_(item_codes)).all()
+            items_map = {i.item_code: i.description for i in items}
+
+        suppliers_map = {}
+        if supplier_ids:
+            suppliers = self.db.query(Supplier.supplier_id, Supplier.name).filter(Supplier.supplier_id.in_(supplier_ids)).all()
+            suppliers_map = {s.supplier_id: s.name for s in suppliers}
+
         results = []
-        for r in reqs:
-            d = self.decision_repo.get_decision_by_group_id(r.group_id)
-            item = self.item_repo.get_by_code(r.resolved_item_code)
-            supp = self.supplier_repo.get_by_id(d.supplier_id) if d and d.supplier_id else None
-            
+        for r, d in rows:
+            item_desc = items_map.get(r.resolved_item_code, r.resolved_item_code)
+            supp_name = suppliers_map.get(d.supplier_id) if d and d.supplier_id else None
+
             results.append({
                 "group_id": r.group_id,
                 "item_code": r.resolved_item_code,
-                "item_description": item.description if item else r.resolved_item_code,
+                "item_description": item_desc,
                 "plant": r.plant,
                 "total_quantity": r.total_quantity,
                 "uom": r.uom,
@@ -38,7 +101,7 @@ class BuyerController:
                     "decision": d.decision if d else None,
                     "route": d.route if d else None,
                     "supplier_id": d.supplier_id if d else None,
-                    "supplier_name": supp.name if supp else None,
+                    "supplier_name": supp_name,
                     "unit_price": d.unit_price if d else None,
                     "group_value_inr": d.group_value_inr if d else None,
                     "suggested_supplier_ids": d.suggested_supplier_ids if d else None,
@@ -52,6 +115,25 @@ class BuyerController:
                     "acted_at": str(d.acted_at) if d and d.acted_at else None
                 } if d else None
             })
+        return results, total_count
+
+    def get_workspace_requirements(
+        self,
+        limit: Optional[int] = None,
+        offset: int = 0,
+        plant: Optional[str] = None,
+        status: Optional[str] = None,
+        route: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        results, _ = self.get_workspace_requirements_paginated(
+            limit=limit,
+            offset=offset,
+            plant=plant,
+            status=status,
+            route=route,
+            search=search
+        )
         return results
 
     def get_requirement_details(self, group_id: str) -> Optional[Dict[str, Any]]:
