@@ -69,10 +69,19 @@ export interface FetchRequirementsParams {
   search?: string;
 }
 
+export interface WorkspaceStats {
+  total: number;
+  pending: number;
+  approved: number;
+  overridden: number;
+  emergency: number;
+}
+
 export interface WorkspaceRequirementsResponse {
   items: any[];
   totalCount: number;
   hasMore: boolean;
+  stats?: WorkspaceStats;
 }
 
 export async function fetchWorkspaceRequirements(
@@ -85,23 +94,41 @@ export async function fetchWorkspaceRequirements(
   if (params?.status && params.status !== 'ALL') query.set('status', params.status);
   if (params?.route && params.route !== 'ALL') query.set('route', params.route);
   if (params?.search && params.search.trim()) query.set('search', params.search.trim());
+  query.set('envelope', 'true');
 
   const queryString = query.toString();
   const url = `${API_BASE}/api/buyer/requirements${queryString ? `?${queryString}` : ''}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch workspace requirements');
 
+  const data = await res.json();
+  if (data && typeof data === 'object' && !Array.isArray(data) && 'items' in data) {
+    return {
+      items: data.items || [],
+      totalCount: Number(data.total_count ?? 0),
+      hasMore: Boolean(data.has_more),
+      stats: data.stats
+    };
+  }
+
+  // Fallback for raw array response
   const totalHeader = res.headers.get('X-Total-Count');
   const hasMoreHeader = res.headers.get('X-Has-More');
-  const items = await res.json();
-  const totalCount = totalHeader ? parseInt(totalHeader, 10) : (Array.isArray(items) ? items.length : 0);
-  const hasMore = hasMoreHeader !== null ? (hasMoreHeader.toLowerCase() === 'true') : (Array.isArray(items) && items.length === (params?.limit ?? 20));
+  const items = Array.isArray(data) ? data : [];
+  const totalCount = totalHeader ? parseInt(totalHeader, 10) : items.length;
+  const hasMore = hasMoreHeader !== null ? (hasMoreHeader.toLowerCase() === 'true') : (items.length === (params?.limit ?? 20));
 
   return {
-    items: Array.isArray(items) ? items : [],
+    items,
     totalCount,
     hasMore
   };
+}
+
+export async function fetchBuyerStats(): Promise<WorkspaceStats> {
+  const res = await fetch(`${API_BASE}/api/buyer/stats`);
+  if (!res.ok) throw new Error('Failed to fetch buyer stats');
+  return res.json();
 }
 
 export async function fetchRequirementDetails(groupId: string) {

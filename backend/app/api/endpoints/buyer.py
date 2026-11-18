@@ -16,6 +16,11 @@ class OverrideRequest(BaseModel):
     new_supplier_id: Optional[str] = None
     buyer_name: Optional[str] = "Buyer"
 
+@router.get("/stats")
+def get_buyer_stats(db: Session = Depends(get_db)):
+    controller = BuyerController(db)
+    return controller.get_buyer_stats()
+
 @router.get("/requirements")
 def list_requirements(
     response: Response,
@@ -25,6 +30,7 @@ def list_requirements(
     status: Optional[str] = None,
     route: Optional[str] = None,
     search: Optional[str] = None,
+    envelope: bool = False,
     db: Session = Depends(get_db)
 ):
     controller = BuyerController(db)
@@ -36,8 +42,20 @@ def list_requirements(
         route=route,
         search=search
     )
+    has_more = (offset + len(items)) < total
     response.headers["X-Total-Count"] = str(total)
-    response.headers["X-Has-More"] = "true" if (offset + len(items)) < total else "false"
+    response.headers["X-Has-More"] = "true" if has_more else "false"
+    
+    if envelope:
+        stats = controller.get_buyer_stats()
+        return {
+            "items": items,
+            "total_count": total,
+            "has_more": has_more,
+            "limit": limit,
+            "offset": offset,
+            "stats": stats
+        }
     return items
 
 @router.get("/requirements/{group_id}")

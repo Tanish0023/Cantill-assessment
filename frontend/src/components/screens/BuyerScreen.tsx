@@ -19,6 +19,13 @@ interface BuyerScreenProps {
 export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) => {
   const [requirements, setRequirements] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState<number>(0);
+  const [stats, setStats] = useState<api.WorkspaceStats>({
+    total: 0,
+    pending: 0,
+    approved: 0,
+    overridden: 0,
+    emergency: 0
+  });
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
@@ -59,8 +66,14 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
         route: currentRoute
       });
       setRequirements(res.items);
-      setTotalCount(res.totalCount);
-      setHasMore(res.hasMore && (res.items.length < res.totalCount));
+      const effTotal = res.totalCount || res.stats?.total || res.items.length;
+      setTotalCount(effTotal);
+      setHasMore(res.hasMore || (res.items.length < effTotal));
+      if (res.stats) {
+        setStats(res.stats);
+      } else {
+        api.fetchBuyerStats().then(s => s && setStats(s)).catch(() => {});
+      }
     } catch (err: any) {
       showNotification('Failed to load workspace requirements: ' + err.message, 'error');
     } finally {
@@ -81,9 +94,19 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
         status: statusFilter,
         route: routeFilter
       });
-      setRequirements(prev => [...prev, ...res.items]);
-      setTotalCount(res.totalCount);
-      setHasMore(res.hasMore && (currentOffset + res.items.length < res.totalCount));
+      if (!res.items || res.items.length === 0) {
+        setHasMore(false);
+      } else {
+        setRequirements(prev => {
+          const seen = new Set(prev.map(i => i.group_id));
+          const uniqueNew = res.items.filter(i => !seen.has(i.group_id));
+          return [...prev, ...uniqueNew];
+        });
+        const effTotal = res.totalCount || res.stats?.total || totalCount;
+        setTotalCount(effTotal);
+        const newTotalCount = currentOffset + res.items.length;
+        setHasMore(res.hasMore && (newTotalCount < effTotal));
+      }
     } catch (err: any) {
       showNotification('Failed to load more requirements: ' + err.message, 'error');
     } finally {
@@ -105,7 +128,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
     }, 350);
   };
 
-  // IntersectionObserver for infinite scroll
+  // Dual infinite scroll: IntersectionObserver with rootMargin + scroll listener fallback
   useEffect(() => {
     const target = observerTarget.current;
     if (!target) return;
@@ -116,13 +139,28 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           loadMoreRequirements();
         }
       },
-      { threshold: 0.1 }
+      { root: null, rootMargin: '250px', threshold: 0.01 }
     );
 
     observer.observe(target);
     return () => {
       observer.unobserve(target);
     };
+  }, [hasMore, loading, loadingMore, requirements.length, search, plantFilter, statusFilter, routeFilter]);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (!hasMore || loading || loadingMore) return;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+      const clientHeight = document.documentElement.clientHeight;
+      if (scrollTop + clientHeight >= scrollHeight - 350) {
+        loadMoreRequirements();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
   }, [hasMore, loading, loadingMore, requirements.length, search, plantFilter, statusFilter, routeFilter]);
 
   const handleOpenDetails = async (groupId: string) => {
@@ -152,6 +190,11 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           };
         }
         return r;
+      }));
+      setStats(prev => ({
+        ...prev,
+        approved: prev.approved + 1,
+        pending: Math.max(0, prev.pending - 1)
       }));
     } catch (err: any) {
       showNotification('Failed to approve decision: ' + err.message, 'error');
@@ -191,6 +234,11 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
         }
         return r;
       }));
+      setStats(prev => ({
+        ...prev,
+        overridden: prev.overridden + 1,
+        pending: Math.max(0, prev.pending - 1)
+      }));
     } catch (err: any) {
       showNotification('Failed to override decision: ' + err.message, 'error');
     } finally {
@@ -217,11 +265,6 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
     return matchesSearch && matchesPlant && matchesStatus && matchesRoute;
   });
 
-  const pendingCount = requirements.filter(r => (r.decision?.status || r.status) === 'AUTO_GENERATED').length;
-  const approvedCount = requirements.filter(r => (r.decision?.status || r.status) === 'APPROVED').length;
-  const overriddenCount = requirements.filter(r => (r.decision?.status || r.status) === 'OVERRIDDEN').length;
-  const emergencyCount = requirements.filter(r => r.is_emergency).length;
-
   return (
     <div className="space-y-5">
       {/* KPI Header Bar */}
@@ -230,7 +273,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Total Evaluated</p>
-              <p className="text-xl font-bold text-slate-900 mt-0.5">{totalCount > 0 ? totalCount : requirements.length}</p>
+              <p className="text-xl font-bold text-slate-900 mt-0.5">{stats.total || totalCount || requirements.length}</p>
             </div>
             <div className="p-2.5 rounded-lg bg-blue-50 text-blue-600">
               <Layers className="w-5 h-5" />
@@ -242,7 +285,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Pending Action</p>
-              <p className="text-xl font-bold text-amber-600 mt-0.5">{pendingCount}</p>
+              <p className="text-xl font-bold text-amber-600 mt-0.5">{stats.pending || 0}</p>
             </div>
             <div className="p-2.5 rounded-lg bg-amber-50 text-amber-600">
               <Clock className="w-5 h-5" />
@@ -254,7 +297,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Buyer Approved</p>
-              <p className="text-xl font-bold text-emerald-600 mt-0.5">{approvedCount}</p>
+              <p className="text-xl font-bold text-emerald-600 mt-0.5">{stats.approved || 0}</p>
             </div>
             <div className="p-2.5 rounded-lg bg-emerald-50 text-emerald-600">
               <CheckCircle2 className="w-5 h-5" />
@@ -266,7 +309,7 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
           <CardContent className="p-3.5 flex items-center justify-between">
             <div>
               <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider">Overridden</p>
-              <p className="text-xl font-bold text-purple-600 mt-0.5">{overriddenCount}</p>
+              <p className="text-xl font-bold text-purple-600 mt-0.5">{stats.overridden || 0}</p>
             </div>
             <div className="p-2.5 rounded-lg bg-purple-50 text-purple-600">
               <ShieldAlert className="w-5 h-5" />
@@ -490,39 +533,43 @@ export const BuyerScreen: React.FC<BuyerScreenProps> = ({ showNotification }) =>
 
         {/* Infinite Scroll Sentinel and Status Bar */}
         {!loading && requirements.length > 0 && (
-          <div 
-            ref={observerTarget}
-            className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50"
-          >
-            <div className="flex items-center space-x-2">
-              <span className="font-semibold text-slate-700">
-                Loaded {requirements.length} of {totalCount} requirements
-              </span>
-              <span className="text-slate-400">•</span>
-              <span className="text-slate-500">20 per batch</span>
-            </div>
+          <>
+            {/* Dedicated scroll observer sentinel element right below table */}
+            <div ref={observerTarget} className="h-4 w-full pointer-events-none" />
 
-            {loadingMore ? (
-              <div className="flex items-center space-x-2 text-blue-600 font-medium">
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Fetching next 20 requirements...</span>
+            <div 
+              className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-slate-500 bg-slate-50/50"
+            >
+              <div className="flex items-center space-x-2">
+                <span className="font-semibold text-slate-700">
+                  Showing {requirements.length} of {stats.total || totalCount} requirements
+                </span>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-500">20 per batch</span>
               </div>
-            ) : hasMore ? (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={loadMoreRequirements}
-                className="h-7 text-xs px-3 border-slate-300 hover:bg-slate-100"
-              >
-                Load Next 20
-              </Button>
-            ) : (
-              <div className="flex items-center space-x-1.5 text-emerald-600 font-medium">
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>All {totalCount} requirements loaded</span>
-              </div>
-            )}
-          </div>
+
+              {loadingMore ? (
+                <div className="flex items-center space-x-2 text-blue-600 font-medium">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Loading next 20 requirements...</span>
+                </div>
+              ) : hasMore ? (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={loadMoreRequirements}
+                  className="h-8 text-xs px-4 bg-slate-900 hover:bg-slate-800 text-white font-medium shadow-xs"
+                >
+                  Load Next 20 Requirements ({Math.max(0, (stats.total || totalCount) - requirements.length)} remaining)
+                </Button>
+              ) : (
+                <div className="flex items-center space-x-1.5 text-emerald-600 font-medium bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                  <span>All {stats.total || totalCount} requirements loaded</span>
+                </div>
+              )}
+            </div>
+          </>
         )}
       </div>
 

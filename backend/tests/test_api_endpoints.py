@@ -54,3 +54,23 @@ def test_buyer_requirements_endpoint(client):
     assert p2_res.status_code == 200
     p2_data = p2_res.json()
     assert isinstance(p2_data, list)
+
+def test_buyer_requirements_envelope(client):
+    response = client.get("/api/buyer/requirements?limit=20&envelope=true")
+    assert response.status_code == 200
+    data = response.json()
+    assert "items" in data
+    assert "total_count" in data
+    assert "has_more" in data
+    assert "stats" in data
+    assert isinstance(data["items"], list)
+
+def test_buyer_stats_endpoint(client):
+    response = client.get("/api/buyer/stats")
+    assert response.status_code == 200
+    data = response.json()
+    assert "total" in data
+    assert "pending" in data
+    assert "approved" in data
+    assert "overridden" in data
+    assert data["total"] >= 0

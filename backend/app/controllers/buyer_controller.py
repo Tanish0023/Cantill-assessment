@@ -136,6 +136,20 @@ class BuyerController:
         )
         return results
 
+    def get_buyer_stats(self) -> Dict[str, int]:
+        total = self.db.query(Requirement).count()
+        approved = self.db.query(Decision).filter(Decision.status == "APPROVED").count()
+        overridden = self.db.query(Decision).filter(Decision.status == "OVERRIDDEN").count()
+        pending = max(0, total - approved - overridden)
+        emergency = self.db.query(Requirement).filter(Requirement.is_emergency.is_(True)).count()
+        return {
+            "total": total,
+            "pending": pending,
+            "approved": approved,
+            "overridden": overridden,
+            "emergency": emergency
+        }
+
     def get_requirement_details(self, group_id: str) -> Optional[Dict[str, Any]]:
         r = self.decision_repo.get_requirement_by_id(group_id)
         if not r:
