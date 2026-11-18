@@ -155,7 +155,9 @@ User message: "{user_message}"
                 need_by = str(today + datetime.timedelta(days=7))
 
         desc = text
-        desc = re.sub(r'\b(need|require|please order|urgent|emergency|for|by|next|friday|monday|tomorrow|chakan|bhosari|pune|chk1|pun1)\b', '', desc, flags=re.IGNORECASE)
+        # Strip dates
+        desc = re.sub(r'\b\d{4}-\d{2}-\d{2}\b', '', desc)
+        desc = re.sub(r'\b(need|require|please order|urgent|urgently|emergency|for|by|next|friday|monday|tomorrow|chakan|bhosari|pune|chk1|pun1|plant|nos|pair|kg|ltr|mtr|rol|set)\b', '', desc, flags=re.IGNORECASE)
         if qty:
             desc = re.sub(rf'\b{int(qty) if qty.is_integer() else qty}\b', '', desc)
         desc = re.sub(r'\s+', ' ', desc).strip()

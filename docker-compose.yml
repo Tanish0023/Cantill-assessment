@@ -29,9 +29,11 @@ services:
       - DATABASE_URL=postgresql://postgres:postgrespassword@db:5432/cantill_db
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
     volumes:
+      - ./backend:/app
       - ./contracts:/app/contracts
       - ./master_data:/app/master_data
       - ./pr_batches:/app/pr_batches
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +48,12 @@ services:
       - "3000:3000"
     environment:
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - WATCHPACK_POLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    command: npm run dev
     depends_on:
       - backend
 

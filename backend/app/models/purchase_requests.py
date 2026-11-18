@@ -9,7 +9,7 @@ class PurchaseRequest(Base):
     pr_no = Column(String(50), primary_key=True)
     requester = Column(String(100), nullable=True)
     department = Column(String(100), nullable=True)
-    plant = Column(String(10), ForeignKey("plants.plant"), nullable=False)
+    plant = Column(String(20), nullable=False, index=True)
     created_at = Column(DateTime, nullable=False, index=True)
     status = Column(String(50), default="SUBMITTED")
     source = Column(String(50), default="BATCH")
