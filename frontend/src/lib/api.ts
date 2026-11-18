@@ -6,6 +6,30 @@ export async function fetchStats() {
   return res.json();
 }
 
+export async function fetchItems() {
+  const res = await fetch(`${API_BASE}/api/data/items`);
+  if (!res.ok) throw new Error('Failed to fetch items');
+  return res.json();
+}
+
+export async function fetchSuppliers() {
+  const res = await fetch(`${API_BASE}/api/data/suppliers`);
+  if (!res.ok) throw new Error('Failed to fetch suppliers');
+  return res.json();
+}
+
+export async function fetchPlants() {
+  const res = await fetch(`${API_BASE}/api/data/plants`);
+  if (!res.ok) throw new Error('Failed to fetch plants');
+  return res.json();
+}
+
+export async function reimportMasterData() {
+  const res = await fetch(`${API_BASE}/api/data/reimport`, { method: 'POST' });
+  if (!res.ok) throw new Error('Failed to reimport master data');
+  return res.json();
+}
+
 export async function sendChatMessage(message: string, currentState: any = null) {
   const res = await fetch(`${API_BASE}/api/chat/message`, {
     method: 'POST',
@@ -54,11 +78,11 @@ export async function approveDecision(groupId: string, buyerName: string = 'Buye
   return res.json();
 }
 
-export async function overrideDecision(groupId: string, newRoute: string, reason: string, buyerName: string = 'Buyer') {
+export async function overrideDecision(groupId: string, newRoute: string, reason: string, buyerName: string = 'Buyer', newSupplierId?: string) {
   const res = await fetch(`${API_BASE}/api/buyer/requirements/${groupId}/override`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ new_route: newRoute, reason, buyer_name: buyerName })
+    body: JSON.stringify({ new_route: newRoute, reason, buyer_name: buyerName, new_supplier_id: newSupplierId })
   });
   if (!res.ok) throw new Error('Failed to override decision');
   return res.json();
@@ -97,6 +121,12 @@ export async function fetchPolicies() {
   return res.json();
 }
 
+export async function fetchActivePolicy() {
+  const res = await fetch(`${API_BASE}/api/policies/active`);
+  if (!res.ok) throw new Error('Failed to fetch active policy');
+  return res.json();
+}
+
 export async function previewPolicyAmendment(text: string) {
   const res = await fetch(`${API_BASE}/api/policies/preview`, {
     method: 'POST',
@@ -107,34 +137,64 @@ export async function previewPolicyAmendment(text: string) {
   return res.json();
 }
 
-export async function createPolicyDraft(parsedData: any, rawText: string) {
+export async function previewPolicyAmendmentPDF(file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await fetch(`${API_BASE}/api/policies/preview-pdf`, {
+    method: 'POST',
+    body: formData
+  });
+  if (!res.ok) throw new Error('Failed to preview amendment PDF');
+  return res.json();
+}
+
+export async function createPolicyDraft(parsedData: any, rawText: string, createdBy: string = 'Procurement Manager') {
   const res = await fetch(`${API_BASE}/api/policies/draft`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ parsed_data: parsedData, raw_text: rawText, created_by: 'Procurement Manager' })
+    body: JSON.stringify({ parsed_data: parsedData, raw_text: rawText, created_by: createdBy })
   });
   if (!res.ok) throw new Error('Failed to create policy draft');
   return res.json();
 }
 
-export async function approvePolicyVersion(policyId: number) {
+export async function approvePolicyVersion(policyId: number, actor: string = 'Head of Procurement') {
   const res = await fetch(`${API_BASE}/api/policies/${policyId}/approve`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ actor: 'Head of Procurement' })
+    body: JSON.stringify({ actor })
   });
   if (!res.ok) throw new Error('Failed to approve policy');
   return res.json();
 }
 
-export async function fetchRankings(asOfDate?: string, itemCode?: string) {
+export async function rejectPolicyVersion(policyId: number, reason: string = '', actor: string = 'Head of Procurement') {
+  const res = await fetch(`${API_BASE}/api/policies/${policyId}/reject`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actor, reason })
+  });
+  if (!res.ok) throw new Error('Failed to reject policy');
+  return res.json();
+}
+
+export async function fetchRankings(asOfDate?: string, itemCode?: string, topN?: number) {
   let url = `${API_BASE}/api/rankings`;
   const params = [];
   if (asOfDate) params.push(`as_of_date=${asOfDate}`);
   if (itemCode) params.push(`item_code=${itemCode}`);
+  if (topN) params.push(`top_n=${topN}`);
   if (params.length) url += `?${params.join('&')}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error('Failed to fetch rankings');
+  return res.json();
+}
+
+export async function fetchSourcingSuggestions(itemCode: string, asOfDate?: string, count: number = 3) {
+  let url = `${API_BASE}/api/rankings/suggestions?item_code=${itemCode}&count=${count}`;
+  if (asOfDate) url += `&as_of_date=${asOfDate}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('Failed to fetch sourcing suggestions');
   return res.json();
 }
 
@@ -144,10 +204,10 @@ export async function fetchContracts() {
   return res.json();
 }
 
-export async function uploadContractPDF(file: File) {
+export async function uploadContractPDF(file: File, addedBy: string = 'Procurement Buyer') {
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('added_by', 'Procurement Buyer');
+  formData.append('added_by', addedBy);
   const res = await fetch(`${API_BASE}/api/contracts/upload-pdf`, {
     method: 'POST',
     body: formData

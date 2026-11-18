@@ -1,0 +1,16 @@
+{
+  "name": "cantill-fullstack-root",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "server:start": "docker compose up -d",
+    "server:build": "docker compose up --build -d",
+    "server:show": "docker compose up",
+    "server:build:show": "docker compose up --build",
+    "server:stop": "docker compose down --remove-orphans",
+    "server:logs": "docker compose logs -f",
+    "server:logs:backend": "docker compose logs -f backend",
+    "server:logs:frontend": "docker compose logs -f frontend",
+    "server:logs:db": "docker compose logs -f db"
+  }
+}
