@@ -12,10 +12,11 @@ def get_stats(db: Session = Depends(get_db)):
     return controller.get_stats()
 
 @router.post("/reimport")
+@router.post("/seed")
 def reimport_master_data(db: Session = Depends(get_db)):
     controller = DataController(db)
     counts = controller.import_all()
-    return {"message": "Data imported successfully", "counts": counts}
+    return {"message": "Data seeded successfully", "counts": counts}
 
 @router.get("/items")
 def list_items(db: Session = Depends(get_db)):

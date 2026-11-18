@@ -6,10 +6,12 @@ _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 _DEFAULT_DB_PATH = os.path.join(_BASE_DIR, "cantill.db")
 
 # Auto-detect data directory (either repo root or container app dir)
-if os.path.exists(os.path.join(_BASE_DIR, "master_data")):
+if os.path.exists(os.path.join(_BASE_DIR, "master_data", "plants.csv")):
     _DEFAULT_DATA_DIR = _BASE_DIR
-else:
+elif os.path.exists(os.path.join(os.path.dirname(_BASE_DIR), "master_data", "plants.csv")):
     _DEFAULT_DATA_DIR = os.path.dirname(_BASE_DIR)
+else:
+    _DEFAULT_DATA_DIR = _BASE_DIR
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "Corvo Procurement Engine"
