@@ -24,3 +24,10 @@ Thumbs.db
 venv/
 
 .env
+
+# Task Data Files (Excluded per submission requirement)
+master_data/
+contracts/
+pr_batches/
+*.pdf
+README.txt
