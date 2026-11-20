@@ -15,7 +15,6 @@ interface BatchScreenProps {
 
 export const BatchScreen: React.FC<BatchScreenProps> = ({ showNotification }) => {
   const [batchFile, setBatchFile] = useState<File | null>(null);
-  const [policyVersion, setPolicyVersion] = useState('');
   const [processing, setProcessing] = useState(false);
   const [batchResults, setBatchResults] = useState<any[]>([]);
   const [search, setSearch] = useState('');
@@ -29,7 +28,7 @@ export const BatchScreen: React.FC<BatchScreenProps> = ({ showNotification }) =>
     }
     setProcessing(true);
     try {
-      const res = await api.processBatchCSV(batchFile, policyVersion || undefined, true);
+      const res = await api.processBatchCSV(batchFile, undefined, true);
       setBatchResults(res.results || res || []);
       showNotification(`Batch processed successfully! Evaluated ${res.total_lines || res.length || 0} PR lines.`, 'success');
     } catch (err: any) {
@@ -42,7 +41,7 @@ export const BatchScreen: React.FC<BatchScreenProps> = ({ showNotification }) =>
   const handleRunSampleBatch = async () => {
     setProcessing(true);
     try {
-      const res = await api.runSampleBatch(policyVersion || undefined);
+      const res = await api.runSampleBatch();
       setBatchResults(res.results || res || []);
       showNotification(`Evaluated sample PR batch: ${res.total_lines || res.length || 0} lines!`, 'success');
     } catch (err: any) {
@@ -396,7 +395,7 @@ export const BatchScreen: React.FC<BatchScreenProps> = ({ showNotification }) =>
                         </td>
 
                         <td className="p-2.5 whitespace-nowrap text-slate-500 text-[10px]">
-                          v{r.policy_version}
+                          v{String(r.policy_version || '').replace(/^v/, '')}
                         </td>
 
                         <td className="p-2.5 font-sans text-[11px] text-slate-600">

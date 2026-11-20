@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, Upload, FileText, CheckCircle2, XCircle, 
+import {
+  ShieldCheck, Upload, FileText, CheckCircle2, XCircle,
   Clock, AlertTriangle, ArrowRight, Sparkles, RefreshCw, FileUp
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -123,25 +123,33 @@ export const PolicyScreen: React.FC<PolicyScreenProps> = ({ showNotification }) 
   return (
     <div className="space-y-6">
       {/* Active Policy Header Card */}
-      <Card className="border-slate-200 bg-linear-to-r from-slate-900 via-slate-800 to-indigo-950 text-white shadow-sm">
-        <CardContent className="p-6">
+      <Card className="border-slate-200 bg-white shadow-xs">
+        <CardContent className="p-5">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center space-x-2.5">
-                <ShieldCheck className="w-6 h-6 text-emerald-400" />
-                <h2 className="text-xl font-bold tracking-tight">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <div className="p-2 bg-emerald-50 rounded-lg text-emerald-700 border border-emerald-200 flex items-center justify-center">
+                  <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                </div>
+                <h2 className="text-xl font-bold tracking-tight text-slate-900">
                   {activePolicy?.title || 'Corvo Engineering Procurement Policy'}
                 </h2>
                 <Badge variant="success" className="font-bold text-xs">
                   ACTIVE v{activePolicy?.version || '5.0'}
                 </Badge>
               </div>
-              <p className="text-xs text-slate-300 mt-1">
-                Document Ref: <span className="font-mono font-semibold">{activePolicy?.document_id || 'CORVO-PROC-POL-04'}</span> | Effective Date: <span className="font-semibold">{activePolicy?.effective_date || '2026-04-01'}</span>
-              </p>
+              <div className="flex flex-wrap items-center gap-3 text-xs text-slate-600 mt-2">
+                <span>
+                  Document Ref: <span className="font-mono font-bold text-slate-900">{activePolicy?.document_id || 'CORVO-PROC-POL-04'}</span>
+                </span>
+                <span className="text-slate-300">•</span>
+                <span>
+                  Effective Date: <span className="font-semibold text-slate-900">{activePolicy?.effective_date || '2026-04-01'}</span>
+                </span>
+              </div>
             </div>
             <div className="flex items-center space-x-2 text-xs">
-              <span className="px-3 py-1.5 rounded-lg bg-white/10 backdrop-blur-xs border border-white/10 font-mono">
+              <span className="px-3 py-1.5 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 font-mono font-medium">
                 "Policy as Data" Active
               </span>
             </div>

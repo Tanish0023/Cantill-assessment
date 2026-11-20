@@ -123,10 +123,9 @@ export default function Home() {
         )}
       </main>
 
-      {/* Footer */}
       <footer className="bg-white border-t border-slate-200 py-3 text-center text-xs text-slate-500">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-2">
-          <span>Corvo Engineering Autonomous PR-to-PO Decision Engine · Policy v5.0</span>
+          <span>Corvo Engineering Autonomous PR-to-PO Decision Engine · Policy v{stats?.active_policy_version || '5.0'}</span>
           <span className="font-mono text-[11px] text-slate-400">Router-Controller-Repository Architecture</span>
         </div>
       </footer>

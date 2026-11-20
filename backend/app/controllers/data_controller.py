@@ -25,6 +25,7 @@ class DataController:
         self.pr_repo = PurchaseRequestRepository(db)
 
     def get_stats(self) -> dict:
+        active_pol = self.policy_repo.get_active_policy()
         return {
             "plants": self.plants_repo.count(),
             "items": self.items_repo.count(),
@@ -35,6 +36,8 @@ class DataController:
             "policies": self.policy_repo.count(),
             "purchase_requests": self.pr_repo.count(),
             "pr_lines": self.pr_repo.count_lines(),
+            "active_policy_version": active_pol.version if active_pol else "5.0",
+            "active_policy_title": active_pol.title if active_pol else "Corvo Engineering Procurement Policy",
         }
 
     def import_all(self, base_dir: str = None) -> dict:

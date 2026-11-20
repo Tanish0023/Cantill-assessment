@@ -104,24 +104,10 @@ class ProcurementController:
 
         normalized_lines.sort(key=lambda x: (x["created_dt"], x["pr_no"], x["pr_line"]))
 
-        ref_date = normalized_lines[0]["created_dt"].date() if normalized_lines else datetime.date.today()
-        policy = policy_override or self.policy_repo.get_active_policy(ref_date)
-        rules_cfg = policy.rules_config if policy and policy.rules_config else {}
-        clubbing_window = rules_cfg.get("clubbing_window_days", 14)
-        need_by_window = rules_cfg.get("need_by_window_days", 7)
-        pol_version = policy.version if policy else "5.0"
-
-        spot_limit = 200000.0
-        emergency_limit = 500000.0
-        rfq_limit = 1000000.0
-        for r in rules_cfg.get("rules", []):
-            r_params = r.get("condition_params", {})
-            if r.get("outcome_route") == "SPOT_PO" and "max_value" in r_params:
-                spot_limit = float(r_params["max_value"])
-            elif r.get("outcome_route") == "EMERGENCY_PO" and "max_value" in r_params:
-                emergency_limit = float(r_params["max_value"])
-            elif r.get("outcome_route") == "RFQ" and "max_value" in r_params:
-                rfq_limit = float(r_params["max_value"])
+        base_policy = policy_override or self.policy_repo.get_active_policy()
+        base_rules_cfg = base_policy.rules_config if base_policy and base_policy.rules_config else {}
+        clubbing_window = base_rules_cfg.get("clubbing_window_days", 14)
+        need_by_window = base_rules_cfg.get("need_by_window_days", 7)
 
         # 2. Clubbing
         requirements = []
@@ -195,6 +181,37 @@ class ProcurementController:
             total_qty = req["total_quantity"]
             is_emergency = req["is_emergency"]
             group_id = req["group_id"]
+            plant = req["plant"]
+            item_obj = req["item_obj"]
+
+            # Determine policy for this requirement: use policy_override if specified, else active policy on requirement date
+            policy = policy_override or self.policy_repo.get_active_policy(req_date)
+            rules_cfg = policy.rules_config if policy and policy.rules_config else {}
+            pol_version = policy.version if policy else "5.0"
+
+            spot_limit = 200000.0
+            emergency_limit = 500000.0
+            rfq_limit = 1000000.0
+            chakan_elec_rule = False
+            chakan_min_val = 50000.0
+            packaging_spot_limit = None
+
+            for r in rules_cfg.get("rules", []):
+                r_params = r.get("condition_params", {})
+                rn = str(r.get("rule_number", "")).strip()
+                if r.get("outcome_route") == "SPOT_PO" and "max_value" in r_params:
+                    spot_limit = float(r_params["max_value"])
+                elif r.get("outcome_route") == "EMERGENCY_PO" and "max_value" in r_params:
+                    emergency_limit = float(r_params["max_value"])
+                elif r.get("outcome_route") == "RFQ" and "max_value" in r_params:
+                    rfq_limit = float(r_params["max_value"])
+
+                if rn == "5.2A" or (r_params.get("plant_id") == "CHK1" and r_params.get("item_category") == "Electrical Spares"):
+                    chakan_elec_rule = True
+                    chakan_min_val = float(r_params.get("min_value", 50000.0))
+
+                if rn == "5.3A" or (r_params.get("item_category") == "Packaging" and "min_value" in r_params):
+                    packaging_spot_limit = float(r_params.get("min_value", 100000.0))
 
             if res_code == "NEW":
                 unit_price = req["first_est_price"] or 0.0
@@ -216,8 +233,6 @@ class ProcurementController:
                     "reason": "New item not in item master; goes to sourcing at requester estimated price without supplier suggestions."
                 }
                 continue
-
-            item_obj = req["item_obj"]
 
             applicable_contracts = []
             for c_id, cl_list in c_lines_map.items():
@@ -297,6 +312,37 @@ class ProcurementController:
                     "reference_doc": c_id,
                     "reason": f"Contract PO against {c_id} with {usable_contract['supplier_name']} at rate INR {usable_contract['rate']:,.2f}; ceiling has room."
                 }
+            elif chakan_elec_rule and plant == "CHK1" and item_obj and item_obj.category == "Electrical Spares" and group_value >= chakan_min_val:
+                if group_value < rfq_limit:
+                    sugg = self.ranking_controller.get_sourcing_suggestions(res_code, req_date, 3)
+                    req_decisions[group_id] = {
+                        "group_id": group_id,
+                        "decision": "SOURCING_REQUEST",
+                        "route": "RFQ",
+                        "supplier_id": None,
+                        "unit_price": unit_price,
+                        "group_value_inr": group_value,
+                        "suggested_supplier_ids": ";".join(sugg),
+                        "policy_version": pol_version,
+                        "clause": "5.2A",
+                        "reference_doc": None,
+                        "reason": f"Rule 5.2A (Chakan electrical safety): Electrical Spares at CHK1 value INR {group_value:,.2f} >= ₹{chakan_min_val:,.0f} must be sourced. 3 suppliers suggested."
+                    }
+                else:
+                    sugg = self.ranking_controller.get_sourcing_suggestions(res_code, req_date, 5)
+                    req_decisions[group_id] = {
+                        "group_id": group_id,
+                        "decision": "SOURCING_REQUEST",
+                        "route": "RFP",
+                        "supplier_id": None,
+                        "unit_price": unit_price,
+                        "group_value_inr": group_value,
+                        "suggested_supplier_ids": ";".join(sugg),
+                        "policy_version": pol_version,
+                        "clause": "5.2A",
+                        "reference_doc": None,
+                        "reason": f"Rule 5.2A (Chakan electrical safety): Electrical Spares at CHK1 value INR {group_value:,.2f} >= ₹{rfq_limit:,.0f} must be sourced via formal RFP. 5 suppliers suggested."
+                    }
             elif is_emergency and group_value <= emergency_limit and has_active_recent_purchase:
                 pref = self.ranking_controller.get_preferred_suppliers(res_code, req_date, top_n=1)
                 top_supp = pref[0] if pref else None
@@ -315,7 +361,11 @@ class ProcurementController:
                     "reference_doc": f"PO history ({active_recent_po.po_number})",
                     "reason": f"Emergency PO for value INR {group_value:,.2f} <= ₹{emergency_limit:,.0f} to 1st preferred supplier {s_id}."
                 }
-            elif group_value < spot_limit and has_active_recent_purchase:
+            elif (
+                group_value < (packaging_spot_limit if (packaging_spot_limit is not None and item_obj and item_obj.category == "Packaging") else spot_limit)
+                and has_active_recent_purchase
+            ):
+                effective_spot_limit = packaging_spot_limit if (packaging_spot_limit is not None and item_obj and item_obj.category == "Packaging") else spot_limit
                 pref = self.ranking_controller.get_preferred_suppliers(res_code, req_date, top_n=1)
                 top_supp = pref[0] if pref else None
                 s_id = top_supp["supplier_id"] if top_supp else None
@@ -331,7 +381,7 @@ class ProcurementController:
                     "policy_version": pol_version,
                     "clause": "5.4",
                     "reference_doc": f"PO history ({active_recent_po.po_number})",
-                    "reason": f"Spot PO for value INR {group_value:,.2f} < ₹{spot_limit:,.0f} to 1st preferred supplier {s_id}."
+                    "reason": f"Spot PO for value INR {group_value:,.2f} < ₹{effective_spot_limit:,.0f} to 1st preferred supplier {s_id}."
                 }
             elif group_value < rfq_limit:
                 sugg = self.ranking_controller.get_sourcing_suggestions(res_code, req_date, 3)

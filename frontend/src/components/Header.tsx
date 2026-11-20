@@ -47,7 +47,9 @@ export const Header: React.FC<HeaderProps> = ({
                   Procurement AI
                 </span>
               </div>
-              <p className="text-xs text-slate-500 font-medium">Policy v5.0 Decision Engine</p>
+              <p className="text-xs text-slate-500 font-medium">
+                Policy v{stats?.active_policy_version || '5.0'} Decision Engine
+              </p>
             </div>
           </div>
 

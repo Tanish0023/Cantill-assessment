@@ -60,8 +60,8 @@ async def process_batch_endpoint(
     policy_repo = PolicyRepository(db)
     
     policy_obj = None
-    if policy_version:
-        policy_obj = policy_repo.get_by_version(policy_version)
+    if policy_version and str(policy_version).strip().upper() not in ("", "AUTO", "NONE"):
+        policy_obj = policy_repo.get_by_version(str(policy_version).strip())
 
     results = controller.process_batch(lines_data, policy_override=policy_obj, persist=persist or False)
 
@@ -98,8 +98,8 @@ def export_sample_decisions(
     policy_repo = PolicyRepository(db)
 
     policy_obj = None
-    if policy_version:
-        policy_obj = policy_repo.get_by_version(policy_version)
+    if policy_version and str(policy_version).strip().upper() not in ("", "AUTO", "NONE"):
+        policy_obj = policy_repo.get_by_version(str(policy_version).strip())
 
     results = controller.process_batch(lines_data, policy_override=policy_obj, persist=persist)
 
